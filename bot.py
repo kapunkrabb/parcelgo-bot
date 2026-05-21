@@ -279,6 +279,22 @@ async def t_confirm(update,ctx):
     uid=update.effective_user.id
     user=update.effective_user
     trip_id=db.add_trip(uid,d["route"].split("→")[0].strip(),d["route"].split("→")[1].strip(),d["date"],d["weight"],d["price"],"—")
+    # Уведомляем отправителей по этому маршруту
+    from_city = d["route"].split("→")[0].strip()
+    to_city = d["route"].split("→")[1].strip()
+    matches = db.find_matches_for_trip(from_city, to_city, 999)
+    for m in matches:
+        try:
+            await ctx.bot.send_message(
+                m["user_id"],
+                f"🎉 *Найден попутчик по вашему маршруту!*\n\n"
+                f"✈️ {d['route']}\n"
+                f"📅 {d['date']} | ⚖️ {d['weight']}\n"
+                f"💰 Цена: {d['price']}\n\n"
+                f"Открой бота чтобы связаться с попутчиком 👇",
+                parse_mode="Markdown"
+            )
+        except: pass
     try:
         await ctx.bot.send_message(ADMIN_ID,f"✈️ Новый рейс #{trip_id}\n{user.first_name} (@{user.username})\n{d['route']} | {d['date']}\nВес: {d['weight']} | Цена: {d['price']}")
     except: pass
