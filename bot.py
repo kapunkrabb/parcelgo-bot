@@ -38,10 +38,18 @@ async def start(update,ctx):
           f"Доставка посылок через попутчиков —\nв *3× дешевле* DHL и *5× быстрее* почты.\n\n"
           f"📊 *Статистика:*\n👥 18 420 участников\n📦 94 700 доставок\n🌍 67 стран\n⭐ 4.92 рейтинг\n\n"
           f"━━━━━━━━━━━━━━━━━━━━\nЧто хочешь сделать? 👇")
+    from telegram import WebAppInfo
+    app_kb = InlineKeyboardMarkup([
+        [InlineKeyboardButton("🚀 Открыть приложение", web_app=WebAppInfo(url="https://kapunkrabb.github.io/parcelgo-app"))],
+        [InlineKeyboardButton("📦  Отправить посылку",callback_data="send")],
+        [InlineKeyboardButton("✈️  Я путешественник — заработать",callback_data="travel")],
+        [InlineKeyboardButton("📋  Мои заявки",callback_data="my"),InlineKeyboardButton("❓  Как работает",callback_data="how")],
+        [InlineKeyboardButton("🚫  Стоп-лист мошенников",callback_data="blacklist")],
+    ])
     if update.message:
-        await update.message.reply_text(text,parse_mode="Markdown",reply_markup=main_kb())
+        await update.message.reply_text(text,parse_mode="Markdown",reply_markup=app_kb)
     else:
-        await update.callback_query.edit_message_text(text,parse_mode="Markdown",reply_markup=main_kb())
+        await update.callback_query.edit_message_text(text,parse_mode="Markdown",reply_markup=app_kb)
     return MAIN
 
 async def how(update,ctx):
