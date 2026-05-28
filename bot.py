@@ -2,8 +2,9 @@ import logging
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
 from telegram.ext import (Application, CommandHandler, CallbackQueryHandler,
                            ConversationHandler, ContextTypes, MessageHandler, filters)
-from database import db
-CHANNEL_ID = "@parcelgo_board"
+5    from database import db
+6    from config import TOKEN, ADMIN_ID, CARD_NUMBER, CARD_HOLDER
+7    CHANNEL_ID = "@parcelgo_board"
 
 logging.basicConfig(format="%(asctime)s - %(levelname)s - %(message)s", level=logging.INFO)
 log = logging.getLogger(__name__)
