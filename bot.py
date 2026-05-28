@@ -79,15 +79,18 @@ async def start(update, ctx):
 async def how(update, ctx):
     await update.callback_query.answer()
     await update.callback_query.edit_message_text(
+        async def how(update, ctx):
+    await update.callback_query.answer()
+    await update.callback_query.edit_message_text(
         "❓ *Как это работает*\n━━━━━━━━━━━━━━━━━━━━\n\n"
         "*📦 Отправить посылку:*\n1️⃣ Выбери маршрут и тип\n2️⃣ Бот найдёт попутчиков\n"
         "3️⃣ Договорись напрямую\n4️⃣ Передай посылку при встрече\n\n"
         "*✈️ Заработать как попутчик:*\n1️⃣ Укажи маршрут и дату\n2️⃣ Найди посылку\n3️⃣ Получи деньги\n\n"
-        "*🔍 Поиск по маршруту:*\nВведи откуда и куда — увидишь всех кто едет и все посылки\n\n"
+        "*🔍 Поиск по маршруту:*\nВведи откуда и куда — увидишь всех попутчиков и посылки\n\n"
         "*⭐ Отзывы:*\nПосле сделки оставь отзыв — это повышает доверие к тебе\n\n"
+        "*🛡 Безопасность:*\n• Верификация участников\n• Стоп-лист мошенников\n• Деньги переводятся напрямую",
         parse_mode="Markdown",
         reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("← Назад", callback_data="back_main")]]))
-
 async def my_req(update, ctx):
     await update.callback_query.answer()
     uid = update.effective_user.id
