@@ -21,11 +21,11 @@ ROUTES = [
     ("✈️","Москва → Берлин"),("🌍","Москва → Стамбул"),
 ]
 TYPES     = [("📱","Техника"),("👗","Одежда"),("💊","Лекарства"),("📄","Документы"),("🎁","Подарок"),("💄","Косметика"),("🍫","Еда"),("📦","Другое")]
-WEIGHTS   = ["до 0.5 кг","0.5–1 кг","1–3 кг","3–5 кг","5–10 кг"]
-BUDGETS   = ["до 1 000 ₽","1 000–2 000 ₽","2 000–4 000 ₽","4 000–7 000 ₽","от 7 000 ₽"]
+SIZES     = ["📦 Маленькая (влезет в рюкзак)","🎒 Средняя (небольшая сумка)","🧳 Большая (чемодан)","📫 Крупногабаритная"]
+
 DATES     = ["Сегодня","Завтра","Через 2–3 дня","На этой неделе","На следующей неделе","В течение месяца"]
 TWEIGHTS  = ["до 1 кг","1–3 кг","3–5 кг","5–10 кг","10+ кг"]
-PRICES    = ["300–500 ₽/кг","500–800 ₽/кг","800–1200 ₽/кг","1200–2000 ₽/кг","от 2000 ₽/кг"]
+
 STARS     = ["⭐ 1","⭐⭐ 2","⭐⭐⭐ 3","⭐⭐⭐⭐ 4","⭐⭐⭐⭐⭐ 5"]
 
 def contact_button(label, username):
@@ -105,7 +105,7 @@ async def my_req(update, ctx):
             lines.append("\n*📦 Посылки:*")
             for r in reqs:
                 e = {"pending":"⏳","matched":"🤝","completed":"✅","cancelled":"❌"}.get(r["status"],"❓")
-                lines.append(f"{e} {r['from_city']} → {r['to_city']} | {r['weight']} | {r['budget']}")
+                lines.append(f"{e} {r['from_city']} → {r['to_city']} | {r['weight']}")
         if trips:
             lines.append("\n*✈️ Мои рейсы:*")
             for t in trips:
@@ -170,7 +170,7 @@ async def search_to(update, ctx):
         lines.append(f"\n📦 *Посылки ({len(requests)}):*")
         for r in requests:
             label = contact_label(r["sender_name"], r["username"])
-            lines.append(f"• {label} | ⚖️ {r['weight']} | 💰 {r['budget']}")
+            lines.append(f"• {label} | 📐 {r['weight']}")
     else:
         lines.append("\n📦 *Посылок нет*")
 
@@ -320,7 +320,7 @@ async def s_route(update, ctx):
         kb.append(row)
     kb.append([InlineKeyboardButton("← Назад", callback_data="send")])
     await update.callback_query.edit_message_text(
-        f"📦 *Отправить посылку*\n━━━━━━━━━━━━━━━━━━━━\n\n✅ {ctx.user_data['route']}\n\n*Шаг 2 из 4* — Что отправляешь? 📦",
+        f"📦 *Отправить посылку*\n━━━━━━━━━━━━━━━━━━━━\n\n✅ {ctx.user_data['route']}\n\n*Шаг 2 из 3* — Что отправляешь? 📦",
         parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(kb))
     return S_TYPE
 
@@ -328,35 +328,26 @@ async def s_type(update, ctx):
     await update.callback_query.answer()
     idx = int(update.callback_query.data.split("_")[1])
     ctx.user_data["type"] = f"{TYPES[idx][0]} {TYPES[idx][1]}"
-    kb = [[InlineKeyboardButton(w, callback_data=f"sw_{i}")] for i, w in enumerate(WEIGHTS)]
+    kb = [[InlineKeyboardButton(s, callback_data=f"ss_{i}")] for i, s in enumerate(SIZES)]
     kb.append([InlineKeyboardButton("← Назад", callback_data="send")])
     await update.callback_query.edit_message_text(
-        f"📦 *Отправить посылку*\n━━━━━━━━━━━━━━━━━━━━\n\n✅ {ctx.user_data['route']}\n✅ {ctx.user_data['type']}\n\n*Шаг 3 из 4* — Вес ⚖️",
+        f"📦 *Отправить посылку*\n━━━━━━━━━━━━━━━━━━━━\n\n✅ {ctx.user_data['route']}\n✅ {ctx.user_data['type']}\n\n*Шаг 3 из 3* — Размер посылки 📐",
         parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(kb))
     return S_WEIGHT
 
 async def s_weight(update, ctx):
     await update.callback_query.answer()
     idx = int(update.callback_query.data.split("_")[1])
-    ctx.user_data["weight"] = WEIGHTS[idx]
-    kb = [[InlineKeyboardButton(b, callback_data=f"sb_{i}")] for i, b in enumerate(BUDGETS)]
-    kb.append([InlineKeyboardButton("← Назад", callback_data="send")])
-    await update.callback_query.edit_message_text(
-        f"📦 *Отправить посылку*\n━━━━━━━━━━━━━━━━━━━━\n\n✅ {ctx.user_data['route']}\n✅ {ctx.user_data['type']}\n✅ {ctx.user_data['weight']}\n\n*Шаг 4 из 4* — Бюджет 💰",
-        parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(kb))
-    return S_BUDGET
-
-async def s_budget(update, ctx):
-    await update.callback_query.answer()
-    idx = int(update.callback_query.data.split("_")[1])
-    ctx.user_data["budget"] = BUDGETS[idx]
+    ctx.user_data["weight"] = SIZES[idx]
     d = ctx.user_data
     await update.callback_query.edit_message_text(
-        f"📦 *Подтверди заявку*\n━━━━━━━━━━━━━━━━━━━━\n\n🗺 {d['route']}\n📦 {d['type']}\n⚖️ {d['weight']}\n💰 {d['budget']}\n\nВсё верно?",
+        f"📦 *Подтверди заявку*\n━━━━━━━━━━━━━━━━━━━━\n\n🗺 {d['route']}\n📦 {d['type']}\n📐 {d['weight']}\n💰 Цена по договорённости\n\nВсё верно?",
         parse_mode="Markdown", reply_markup=InlineKeyboardMarkup([
             [InlineKeyboardButton("✅ Создать заявку", callback_data="sc")],
             [InlineKeyboardButton("✏️ Изменить", callback_data="send")]]))
     return S_CONFIRM
+
+
 
 async def s_confirm(update, ctx):
     await update.callback_query.answer()
@@ -367,20 +358,20 @@ async def s_confirm(update, ctx):
     from_city = parts[0].strip().lstrip("🇦🇪🇬🇧🇹🇭🇹🇷🇩🇪🇬🇪✈🌍 ").strip()
     to_city = parts[1].strip() if len(parts) > 1 else ""
 
-    req_id = db.add_request(uid, from_city, to_city, d["weight"], d["type"], d["budget"])
+    req_id = db.add_request(uid, from_city, to_city, d["weight"], d["type"], "договорная")
     travelers = db.find_travelers(from_city, to_city)
     sender_label = contact_label(user.first_name, user.username)
 
     # Публикуем в канал
     await publish_to_channel(ctx.bot,
         f"📦 *Нужен попутчик!*\n━━━━━━━━━━━━━━━━━━━━\n\n"
-        f"🗺 {d['route']}\n📦 {d['type']} | ⚖️ {d['weight']}\n💰 {d['budget']}\n\n"
+        f"🗺 {d['route']}\n📦 {d['type']} | 📐 {d['weight']}\n💰 Цена по договорённости\n\n"
         f"👤 Отправитель: {sender_label}",
         user.username, "💬 Написать отправителю")
 
     if travelers:
         lines = [f"✅ *Заявка #{req_id} создана!*\n━━━━━━━━━━━━━━━━━━━━\n\n"
-                 f"🗺 {d['route']}\n📦 {d['type']} | ⚖️ {d['weight']}\n💰 {d['budget']}\n\n"
+                 f"🗺 {d['route']}\n📦 {d['type']} | 📐 {d['weight']}\n💰 Цена по договорённости\n\n"
                  f"🎉 *Найдено попутчиков: {len(travelers)}*\n━━━━━━━━━━━━━━━━━━━━"]
         kb = []
         for t in travelers:
@@ -400,7 +391,7 @@ async def s_confirm(update, ctx):
                 t_kb.append([InlineKeyboardButton("⭐ Оставить отзыв", callback_data="review_start")])
                 await ctx.bot.send_message(t["user_id"],
                     f"📦 *Новая посылка по вашему маршруту!*\n━━━━━━━━━━━━━━━━━━━━\n\n"
-                    f"🗺 {d['route']}\n📦 {d['type']} | ⚖️ {d['weight']}\n💰 {d['budget']}\n\n"
+                    f"🗺 {d['route']}\n📦 {d['type']} | 📐 {d['weight']}\n💰 Цена по договорённости\n\n"
                     f"👤 Отправитель: {sender_label}\n\nДоговоритесь напрямую 👇",
                     parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(t_kb))
             except Exception as e:
@@ -408,7 +399,7 @@ async def s_confirm(update, ctx):
     else:
         await update.callback_query.edit_message_text(
             f"✅ *Заявка #{req_id} создана!*\n━━━━━━━━━━━━━━━━━━━━\n\n"
-            f"🗺 {d['route']}\n📦 {d['type']} | ⚖️ {d['weight']}\n💰 {d['budget']}\n\n"
+            f"🗺 {d['route']}\n📦 {d['type']} | 📐 {d['weight']}\n💰 Цена по договорённости\n\n"
             f"🔍 Ищем попутчиков...\nКак только кто-то зарегистрирует рейс — сразу уведомим! 🙏\n\n"
             f"📢 Объявление опубликовано в @parcelgo_board",
             parse_mode="Markdown",
@@ -417,7 +408,7 @@ async def s_confirm(update, ctx):
     try:
         await ctx.bot.send_message(ADMIN_ID,
             f"📦 Заявка #{req_id}\nОт: {user.first_name} (@{user.username})\n"
-            f"{d['route']} | {d['type']} | {d['weight']}\nБюджет: {d['budget']}\nПопутчиков: {len(travelers)}")
+            f"{d['route']} | {d['type']} | {d['weight']}\nБюджет: договорная\nПопутчиков: {len(travelers)}")
     except: pass
     return ConversationHandler.END
 
@@ -456,7 +447,7 @@ async def t_date(update, ctx):
     kb = [[InlineKeyboardButton(w, callback_data=f"tw_{i}")] for i, w in enumerate(TWEIGHTS)]
     kb.append([InlineKeyboardButton("← Назад", callback_data="travel")])
     await update.callback_query.edit_message_text(
-        f"✈️ *Регистрация рейса*\n━━━━━━━━━━━━━━━━━━━━\n\n✅ {ctx.user_data['route']}\n✅ {ctx.user_data['date']}\n\n*Шаг 3 из 4* — Сколько кг возьмёшь? ⚖️",
+        f"✈️ *Регистрация рейса*\n━━━━━━━━━━━━━━━━━━━━\n\n✅ {ctx.user_data['route']}\n✅ {ctx.user_data['date']}\n\n*Шаг 3 из 3* — Сколько кг возьмёшь? ⚖️",
         parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(kb))
     return T_WEIGHT
 
@@ -464,24 +455,15 @@ async def t_weight(update, ctx):
     await update.callback_query.answer()
     idx = int(update.callback_query.data.split("_")[1])
     ctx.user_data["weight"] = TWEIGHTS[idx]
-    kb = [[InlineKeyboardButton(p, callback_data=f"tp_{i}")] for i, p in enumerate(PRICES)]
-    kb.append([InlineKeyboardButton("← Назад", callback_data="travel")])
-    await update.callback_query.edit_message_text(
-        f"✈️ *Регистрация рейса*\n━━━━━━━━━━━━━━━━━━━━\n\n✅ {ctx.user_data['route']}\n✅ {ctx.user_data['date']}\n✅ {ctx.user_data['weight']}\n\n*Шаг 4 из 4* — Твоя цена за кг 💰",
-        parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(kb))
-    return T_PRICE
-
-async def t_price(update, ctx):
-    await update.callback_query.answer()
-    idx = int(update.callback_query.data.split("_")[1])
-    ctx.user_data["price"] = PRICES[idx]
     d = ctx.user_data
     await update.callback_query.edit_message_text(
-        f"✈️ *Подтверди рейс*\n━━━━━━━━━━━━━━━━━━━━\n\n🗺 {d['route']}\n📅 {d['date']}\n⚖️ {d['weight']}\n💰 {d['price']}\n\nВсё верно?",
+        f"✈️ *Подтверди рейс*\n━━━━━━━━━━━━━━━━━━━━\n\n🗺 {d['route']}\n📅 {d['date']}\n⚖️ {d['weight']}\n💰 Цена по договорённости\n\nВсё верно?",
         parse_mode="Markdown", reply_markup=InlineKeyboardMarkup([
             [InlineKeyboardButton("✅ Зарегистрировать рейс", callback_data="tc")],
             [InlineKeyboardButton("✏️ Изменить", callback_data="travel")]]))
     return T_CONFIRM
+
+
 
 async def t_confirm(update, ctx):
     await update.callback_query.answer()
@@ -492,20 +474,20 @@ async def t_confirm(update, ctx):
     from_city = parts[0].strip().lstrip("🇦🇪🇬🇧🇹🇭🇹🇷🇩🇪🇬🇪✈🌍 ").strip()
     to_city = parts[1].strip() if len(parts) > 1 else ""
 
-    trip_id = db.add_trip(uid, from_city, to_city, d["date"], d["weight"], d["price"], "—")
+    trip_id = db.add_trip(uid, from_city, to_city, d["date"], d["weight"], "договорная", "—")
     matches = db.find_matches_for_trip(from_city, to_city)
     traveler_label = contact_label(user.first_name, user.username)
 
     # Публикуем в канал
     await publish_to_channel(ctx.bot,
         f"✈️ *Возьму посылку!*\n━━━━━━━━━━━━━━━━━━━━\n\n"
-        f"🗺 {d['route']}\n📅 {d['date']} | ⚖️ до {d['weight']}\n💰 Цена: {d['price']}\n\n"
+        f"🗺 {d['route']}\n📅 {d['date']} | ⚖️ до {d['weight']}\n💰 Цена: договорная\n\n"
         f"👤 Попутчик: {traveler_label}",
         user.username, "💬 Написать попутчику")
 
     if matches:
         lines = [f"✅ *Рейс #{trip_id} зарегистрирован!*\n━━━━━━━━━━━━━━━━━━━━\n\n"
-                 f"🗺 {d['route']}\n📅 {d['date']} | ⚖️ {d['weight']}\n💰 {d['price']}\n\n"
+                 f"🗺 {d['route']}\n📅 {d['date']} | ⚖️ {d['weight']}\n💰 договорная\n\n"
                  f"🎉 *Найдено заявок: {len(matches)}*\n━━━━━━━━━━━━━━━━━━━━"]
         kb = []
         for m in matches:
@@ -525,7 +507,7 @@ async def t_confirm(update, ctx):
                 s_kb.append([InlineKeyboardButton("⭐ Оставить отзыв", callback_data="review_start")])
                 await ctx.bot.send_message(m["user_id"],
                     f"🎉 *Найден попутчик по вашему маршруту!*\n━━━━━━━━━━━━━━━━━━━━\n\n"
-                    f"✈️ {d['route']}\n📅 {d['date']} | ⚖️ {d['weight']}\n💰 {d['price']}\n\n"
+                    f"✈️ {d['route']}\n📅 {d['date']} | ⚖️ {d['weight']}\n💰 договорная\n\n"
                     f"👤 Попутчик: {traveler_label}\n\nДоговоритесь напрямую 👇",
                     parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(s_kb))
             except Exception as e:
@@ -533,7 +515,7 @@ async def t_confirm(update, ctx):
     else:
         await update.callback_query.edit_message_text(
             f"✅ *Рейс #{trip_id} зарегистрирован!*\n━━━━━━━━━━━━━━━━━━━━\n\n"
-            f"🗺 {d['route']}\n📅 {d['date']} | ⚖️ {d['weight']}\n💰 {d['price']}\n\n"
+            f"🗺 {d['route']}\n📅 {d['date']} | ⚖️ {d['weight']}\n💰 договорная\n\n"
             f"📭 Как только появятся посылки — сразу уведомим! 🙏\n\n"
             f"📢 Объявление опубликовано в @parcelgo_board",
             parse_mode="Markdown",
@@ -542,7 +524,7 @@ async def t_confirm(update, ctx):
     try:
         await ctx.bot.send_message(ADMIN_ID,
             f"✈️ Рейс #{trip_id}\nОт: {user.first_name} (@{user.username})\n"
-            f"{d['route']} | {d['date']}\nВес: {d['weight']} | Цена: {d['price']}\nЗаявок: {len(matches)}")
+            f"{d['route']} | {d['date']}\nВес: {d['weight']} | Цена: договорная\nЗаявок: {len(matches)}")
     except: pass
     return ConversationHandler.END
 
@@ -575,7 +557,7 @@ async def handle_custom_route(update, ctx):
             kb.append(row)
         kb.append([InlineKeyboardButton("← Назад", callback_data="send")])
         await update.message.reply_text(
-            f"📦 *Отправить посылку*\n━━━━━━━━━━━━━━━━━━━━\n\n✅ {text}\n\n*Шаг 2 из 4* — Что отправляешь? 📦",
+            f"📦 *Отправить посылку*\n━━━━━━━━━━━━━━━━━━━━\n\n✅ {text}\n\n*Шаг 2 из 3* — Что отправляешь? 📦",
             parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(kb))
         return S_TYPE
 
@@ -637,14 +619,12 @@ def main():
             S_ROUTE:  [CallbackQueryHandler(s_route, pattern="^sr_"), CallbackQueryHandler(s_custom, pattern="^srcustom$")],
             S_CUSTOM: [MessageHandler(filters.TEXT & ~filters.COMMAND, handle_custom_route)],
             S_TYPE:   [CallbackQueryHandler(s_type,   pattern="^st_")],
-            S_WEIGHT: [CallbackQueryHandler(s_weight, pattern="^sw_")],
-            S_BUDGET: [CallbackQueryHandler(s_budget, pattern="^sb_")],
+            S_WEIGHT: [CallbackQueryHandler(s_weight, pattern="^ss_")],
             S_CONFIRM:[CallbackQueryHandler(s_confirm,pattern="^sc$")],
             T_ROUTE:  [CallbackQueryHandler(t_route, pattern="^tr_"), CallbackQueryHandler(t_custom, pattern="^trcustom$")],
             T_CUSTOM: [MessageHandler(filters.TEXT & ~filters.COMMAND, handle_custom_route)],
             T_DATE:   [CallbackQueryHandler(t_date,   pattern="^td_")],
             T_WEIGHT: [CallbackQueryHandler(t_weight, pattern="^tw_")],
-            T_PRICE:  [CallbackQueryHandler(t_price,  pattern="^tp_")],
             T_CONFIRM:[CallbackQueryHandler(t_confirm,pattern="^tc$")],
             FREE_POST:[MessageHandler(filters.TEXT & ~filters.COMMAND, free_post_send)],
             SEARCH_FROM:[MessageHandler(filters.TEXT & ~filters.COMMAND, search_from)],
@@ -672,4 +652,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
