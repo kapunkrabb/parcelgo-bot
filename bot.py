@@ -3,7 +3,7 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, WebAppI
 from telegram.ext import (Application, CommandHandler, CallbackQueryHandler,
                            ConversationHandler, ContextTypes, MessageHandler, filters)
 from database import db
-from config import TOKEN, ADMIN_ID, CARD_NUMBER, CARD_HOLDER
+CHANNEL_ID = "@parcelgo_board"
 
 logging.basicConfig(format="%(asctime)s - %(levelname)s - %(message)s", level=logging.INFO)
 log = logging.getLogger(__name__)
@@ -39,7 +39,7 @@ async def start(update, ctx):
             f"Доставка посылок через попутчиков —\nв *3× дешевле* DHL и *5× быстрее* почты.\n\n"
             f"📊 *Статистика:*\n👥 18 420 участников\n📦 94 700 доставок\n🌍 67 стран\n⭐ 4.92 рейтинг\n\n"
             f"━━━━━━━━━━━━━━━━━━━━\nЧто хочешь сделать? 👇")
-    app_kb = InlineKeyboardMarkup([
+    app_kb = InlineKeyboardMarkup([[InlineKeyboardButton("📢  Доска объявлений", url="https://t.me/parcelgo_board")],
         [InlineKeyboardButton("🚀 Открыть приложение", web_app=WebAppInfo(url="https://kapunkrabb.github.io/parcelgo-app"))],
         [InlineKeyboardButton("📦  Отправить посылку", callback_data="send")],
         [InlineKeyboardButton("✈️  Я путешественник — заработать", callback_data="travel")],
