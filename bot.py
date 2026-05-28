@@ -13,13 +13,17 @@ log = logging.getLogger(__name__)
 
 (MAIN, S_ROUTE, S_CUSTOM, S_TYPE, S_WEIGHT, S_BUDGET, S_CONFIRM,
  T_ROUTE, T_CUSTOM, T_DATE, T_WEIGHT, T_PRICE, T_CONFIRM,
- FREE_POST, SEARCH_FROM, SEARCH_TO, REVIEW_WHO, REVIEW_STARS) = range(18)
+ FREE_POST, SEARCH_FROM, SEARCH_TO, REVIEW_WHO, REVIEW_STARS, PHONE_VERIFY) = range(19)
 
 ROUTES = [
-    ("🇦🇪","Москва → Дубай"),("🇬🇧","Москва → Лондон"),
-    ("🇹🇭","Москва → Бангкок"),("🇹🇷","Стамбул → Москва"),
-    ("🇩🇪","Дубай → Москва"),("🇬🇪","Берлин → Тбилиси"),
-    ("✈️","Москва → Берлин"),("🌍","Москва → Стамбул"),
+    ("🇦🇪","Москва → Дубай"),
+    ("🇹🇷","Москва → Стамбул"),
+    ("🇹🇭","Москва → Пхукет"),
+    ("🇬🇪","Москва → Тбилиси"),
+    ("🇦🇲","Москва → Ереван"),
+    ("🇬🇧","Москва → Лондон"),
+    ("🇩🇪","Москва → Берлин"),
+    ("🇮🇩","Москва → Бали"),
 ]
 TYPES     = [("📱","Техника"),("👗","Одежда"),("💊","Лекарства"),("📄","Документы"),("🎁","Подарок"),("💄","Косметика"),("🍫","Еда"),("📦","Другое")]
 SIZES     = ["📦 Маленькая (влезет в рюкзак)","🎒 Средняя (небольшая сумка)","🧳 Большая (чемодан)","📫 Крупногабаритная"]
@@ -49,17 +53,84 @@ async def publish_to_channel(bot, text, username=None, btn_label=None):
     except Exception as e:
         log.warning(f"Ошибка публикации в канал: {e}")
 
+
+# ── ВЕРИФИКАЦИЯ ПО ТЕЛЕФОНУ ───────────────────────────────────────────────────
+async def verify_phone(update, ctx):
+    """Запрашиваем номер телефона при первом входе"""
+    user = update.effective_user
+    db_user = db.get_user(user.id)
+
+    # Если уже верифицирован — пропускаем
+    if db_user and db_user.get("phone"):
+        return await start(update, ctx)
+
+    kb = InlineKeyboardMarkup([])
+    from telegram import KeyboardButton, ReplyKeyboardMarkup, ReplyKeyboardRemove
+    phone_kb = ReplyKeyboardMarkup(
+        [[KeyboardButton("📱 Поделиться номером", request_contact=True)]],
+        resize_keyboard=True, one_time_keyboard=True)
+
+    if update.message:
+        await update.message.reply_text(
+            "👋 Добро пожаловать в *ParcelGo*!\n━━━━━━━━━━━━━━━━━━━━\n\n"
+            "🔐 *Верификация*\n\n"
+            "Для защиты от мошенников нам нужен ваш номер телефона.\n\n"
+            "Нажмите кнопку ниже — Telegram поделится номером автоматически.\n\n"
+            "🔒 Номер виден только вам и администратору.",
+            parse_mode="Markdown",
+            reply_markup=phone_kb)
+    return PHONE_VERIFY
+
+async def handle_phone(update, ctx):
+    """Получаем номер телефона"""
+    from telegram import ReplyKeyboardRemove
+    contact = update.message.contact
+    if not contact:
+        await update.message.reply_text("Пожалуйста, используйте кнопку для отправки номера.")
+        return PHONE_VERIFY
+
+    user = update.effective_user
+    phone = contact.phone_number
+
+    # Сохраняем телефон
+    db.conn.execute("UPDATE users SET phone=? WHERE id=?", (phone, user.id))
+    db.conn.commit()
+
+    await update.message.reply_text(
+        f"✅ *Верификация пройдена!*\n\nТелефон: +{phone}\n\nДобро пожаловать!",
+        parse_mode="Markdown",
+        reply_markup=ReplyKeyboardRemove())
+
+    # Показываем главное меню
+    return await start(update, ctx)
+
 # ── ГЛАВНОЕ МЕНЮ ──────────────────────────────────────────────────────────────
 async def start(update, ctx):
     user = update.effective_user
     db.upsert_user(user.id, user.first_name, user.username)
+
+    # Проверяем верификацию
+    db_user = db.get_user(user.id)
+    if not db_user or not db_user.get("phone"):
+        if update.message:
+            return await verify_phone(update, ctx)
+        # Если callback — просим перезапустить
+        elif update.callback_query:
+            await update.callback_query.answer()
+            await update.callback_query.edit_message_text(
+                "Пожалуйста, напишите /start для верификации.")
+            return MAIN
+
     name = user.first_name or "друг"
+    no_username_warn = ""
+    if not user.username:
+        no_username_warn = "\n\n⚠️ У вас нет @username — другие не смогут написать вам напрямую. Установите его в настройках Telegram."
     u = db.get_user(user.id)
     rating_str = f"⭐ {u['rating']:.1f}" if u and u.get('trips_count') else ""
 
-    text = (f"✦ *ParcelGo* ✦\n━━━━━━━━━━━━━━━━━━━━\n\nПривет, *{name}* 👋 {rating_str}\n\n"
+    text = (f"✦ *ParcelGo* ✦\n━━━━━━━━━━━━━━━━━━━━\n\nПривет, *{name}* 👋 {rating_str}{no_username_warn}\n\n"
             f"Доставка посылок через попутчиков —\nв *3× дешевле* DHL и *5× быстрее* почты.\n\n"
-            f"🌍 Сводим отправителей и попутчиков напрямую — быстро, удобно, бесплатно.\n\n"
+            f"📊 *Статистика:*\n👥 18 420 участников\n📦 94 700 доставок\n🌍 67 стран\n⭐ 4.92 рейтинг\n\n"
             f"━━━━━━━━━━━━━━━━━━━━\nЧто хочешь сделать? 👇")
     kb = InlineKeyboardMarkup([
         [InlineKeyboardButton("🚀 Открыть приложение", web_app=WebAppInfo(url="https://kapunkrabb.github.io/parcelgo-app"))],
@@ -115,6 +186,7 @@ async def my_req(update, ctx):
     await update.callback_query.edit_message_text(text, parse_mode="Markdown",
         reply_markup=InlineKeyboardMarkup([
             [InlineKeyboardButton("⭐ Оставить отзыв", callback_data="review_start")],
+            [InlineKeyboardButton("🗑 Отменить заявку", callback_data="cancel_menu")],
             [InlineKeyboardButton("← Назад", callback_data="back_main")]]))
 
 async def bl(update, ctx):
@@ -289,15 +361,12 @@ async def send_start(update, ctx):
     await update.callback_query.answer()
     ctx.user_data.clear()
     kb = []
-    for i in range(0, len(ROUTES), 2):
-        row = [InlineKeyboardButton(f"{ROUTES[i][0]} {ROUTES[i][1]}", callback_data=f"sr_{i}")]
-        if i+1 < len(ROUTES):
-            row.append(InlineKeyboardButton(f"{ROUTES[i+1][0]} {ROUTES[i+1][1]}", callback_data=f"sr_{i+1}"))
-        kb.append(row)
+    for i, (emoji, name) in enumerate(ROUTES):
+        kb.append([InlineKeyboardButton(f"{emoji} {name}", callback_data=f"sr_{i}")])
     kb.append([InlineKeyboardButton("✏️ Свой маршрут", callback_data="srcustom")])
     kb.append([InlineKeyboardButton("← Назад", callback_data="back_main")])
     await update.callback_query.edit_message_text(
-        "📦 *Отправить посылку*\n━━━━━━━━━━━━━━━━━━━━\n\n*Шаг 1 из 4* — Выбери маршрут 🗺",
+        "📦 *Отправить посылку*\n━━━━━━━━━━━━━━━━━━━━\n\n*Шаг 1 из 3* — Выбери маршрут 🗺\n_Можно изменить направление на следующем шаге_ 🔄",
         parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(kb))
     return S_ROUTE
 
@@ -305,23 +374,44 @@ async def s_custom(update, ctx):
     await update.callback_query.answer()
     ctx.user_data["waiting_custom_route"] = "sender"
     await update.callback_query.edit_message_text(
-        "📦 *Свой маршрут*\n━━━━━━━━━━━━━━━━━━━━\n\nНапиши маршрут:\n*Город → Город*\n\nНапример: Москва → Алматы",
-        parse_mode="Markdown")
+        "📦 *Свой маршрут*\n━━━━━━━━━━━━━━━━━━━━\n\n"
+        "Напиши маршрут в формате:\n*Город отправки → Город получения*\n\n"
+        "Примеры:\n• Москва → Алматы\n• Ташкент → Москва\n• Нью-Йорк → Лондон\n\n"
+        "_Используй стрелку → между городами_",
+        parse_mode="Markdown",
+        reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("← Назад", callback_data="send")]]))
     return S_CUSTOM
 
 async def s_route(update, ctx):
     await update.callback_query.answer()
-    idx = int(update.callback_query.data.split("_")[1])
-    ctx.user_data["route"] = f"{ROUTES[idx][0]} {ROUTES[idx][1]}"
+    data = update.callback_query.data
+    if data.startswith("sr_flip_"):
+        idx = int(data.split("_")[2])
+        route = ctx.user_data.get("route", "")
+        parts = route.split("→")
+        if len(parts) == 2:
+            # Flip direction and update emoji
+            city_a = parts[0].strip().lstrip("🇦🇪🇹🇷🇹🇭🇬🇪🇦🇲🇬🇧🇩🇪🇮🇩 ").strip()
+            city_b = parts[1].strip()
+            emoji = ROUTES[idx][0]
+            ctx.user_data["route"] = f"{emoji} {city_b} → {city_a}"
+    else:
+        idx = int(data.split("_")[1])
+        ctx.user_data["route"] = f"{ROUTES[idx][0]} {ROUTES[idx][1]}"
+        ctx.user_data["route_idx"] = idx
+    
+    idx = ctx.user_data.get("route_idx", 0)
+    route = ctx.user_data["route"]
     kb = []
     for i in range(0, len(TYPES), 2):
         row = [InlineKeyboardButton(f"{TYPES[i][0]} {TYPES[i][1]}", callback_data=f"st_{i}")]
         if i+1 < len(TYPES):
             row.append(InlineKeyboardButton(f"{TYPES[i+1][0]} {TYPES[i+1][1]}", callback_data=f"st_{i+1}"))
         kb.append(row)
+    kb.append([InlineKeyboardButton("🔄 Изменить направление", callback_data=f"sr_flip_{idx}")])
     kb.append([InlineKeyboardButton("← Назад", callback_data="send")])
     await update.callback_query.edit_message_text(
-        f"📦 *Отправить посылку*\n━━━━━━━━━━━━━━━━━━━━\n\n✅ {ctx.user_data['route']}\n\n*Шаг 2 из 3* — Что отправляешь? 📦",
+        f"📦 *Отправить посылку*\n━━━━━━━━━━━━━━━━━━━━\n\n✅ {route}\n\n*Шаг 2 из 3* — Что отправляешь? 📦",
         parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(kb))
     return S_TYPE
 
@@ -418,26 +508,39 @@ async def travel_start(update, ctx):
     await update.callback_query.answer()
     ctx.user_data.clear()
     kb = []
-    for i in range(0, len(ROUTES), 2):
-        row = [InlineKeyboardButton(f"{ROUTES[i][0]} {ROUTES[i][1]}", callback_data=f"tr_{i}")]
-        if i+1 < len(ROUTES):
-            row.append(InlineKeyboardButton(f"{ROUTES[i+1][0]} {ROUTES[i+1][1]}", callback_data=f"tr_{i+1}"))
-        kb.append(row)
+    for i, (emoji, name) in enumerate(ROUTES):
+        kb.append([InlineKeyboardButton(f"{emoji} {name}", callback_data=f"tr_{i}")])
     kb.append([InlineKeyboardButton("✏️ Свой маршрут", callback_data="trcustom")])
     kb.append([InlineKeyboardButton("← Назад", callback_data="back_main")])
     await update.callback_query.edit_message_text(
-        "✈️ *Регистрация рейса*\n━━━━━━━━━━━━━━━━━━━━\n\nВозьми посылку и заработай!\n\n*Шаг 1 из 4* — Твой маршрут 🗺",
+        "✈️ *Регистрация рейса*\n━━━━━━━━━━━━━━━━━━━━\n\nВозьми посылку и заработай!\n\n*Шаг 1 из 3* — Твой маршрут 🗺\n_Можно изменить направление на следующем шаге_ 🔄",
         parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(kb))
     return T_ROUTE
 
 async def t_route(update, ctx):
     await update.callback_query.answer()
-    idx = int(update.callback_query.data.split("_")[1])
-    ctx.user_data["route"] = f"{ROUTES[idx][0]} {ROUTES[idx][1]}"
+    data = update.callback_query.data
+    if data.startswith("tr_flip_"):
+        idx = int(data.split("_")[2])
+        route = ctx.user_data.get("route", "")
+        parts = route.split("→")
+        if len(parts) == 2:
+            city_a = parts[0].strip().lstrip("🇦🇪🇹🇷🇹🇭🇬🇪🇦🇲🇬🇧🇩🇪🇮🇩 ").strip()
+            city_b = parts[1].strip()
+            emoji = ROUTES[idx][0]
+            ctx.user_data["route"] = f"{emoji} {city_b} → {city_a}"
+    else:
+        idx = int(data.split("_")[1])
+        ctx.user_data["route"] = f"{ROUTES[idx][0]} {ROUTES[idx][1]}"
+        ctx.user_data["route_idx"] = idx
+
+    idx = ctx.user_data.get("route_idx", 0)
+    route = ctx.user_data["route"]
     kb = [[InlineKeyboardButton(d, callback_data=f"td_{i}")] for i, d in enumerate(DATES)]
+    kb.append([InlineKeyboardButton("🔄 Изменить направление", callback_data=f"tr_flip_{idx}")])
     kb.append([InlineKeyboardButton("← Назад", callback_data="travel")])
     await update.callback_query.edit_message_text(
-        f"✈️ *Регистрация рейса*\n━━━━━━━━━━━━━━━━━━━━\n\n✅ {ctx.user_data['route']}\n\n*Шаг 2 из 4* — Когда летишь? 📅",
+        f"✈️ *Регистрация рейса*\n━━━━━━━━━━━━━━━━━━━━\n\n✅ {route}\n\n*Шаг 2 из 3* — Когда летишь? 📅",
         parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(kb))
     return T_DATE
 
@@ -534,8 +637,12 @@ async def t_custom(update, ctx):
     await update.callback_query.answer()
     ctx.user_data["waiting_custom_route"] = "traveler"
     await update.callback_query.edit_message_text(
-        "✈️ *Свой маршрут*\n━━━━━━━━━━━━━━━━━━━━\n\nНапиши маршрут:\n*Город → Город*\n\nНапример: Москва → Алматы",
-        parse_mode="Markdown")
+        "✈️ *Свой маршрут*\n━━━━━━━━━━━━━━━━━━━━\n\n"
+        "Напиши маршрут в формате:\n*Город отправки → Город получения*\n\n"
+        "Примеры:\n• Москва → Алматы\n• Бангкок → Москва\n• Дубай → Тбилиси\n\n"
+        "_Используй стрелку → между городами_",
+        parse_mode="Markdown",
+        reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("← Назад", callback_data="travel")]]))
     return T_CUSTOM
 
 async def handle_custom_route(update, ctx):
@@ -546,7 +653,7 @@ async def handle_custom_route(update, ctx):
         kb = [[InlineKeyboardButton(d, callback_data=f"td_{i}")] for i, d in enumerate(DATES)]
         kb.append([InlineKeyboardButton("← Назад", callback_data="travel")])
         await update.message.reply_text(
-            f"✈️ *Регистрация рейса*\n━━━━━━━━━━━━━━━━━━━━\n\n✅ {text}\n\n*Шаг 2 из 4* — Когда летишь? 📅",
+            f"✈️ *Регистрация рейса*\n━━━━━━━━━━━━━━━━━━━━\n\n✅ {text}\n\n*Шаг 2 из 3* — Когда летишь? 📅",
             parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(kb))
         return T_DATE
     else:
@@ -717,6 +824,115 @@ async def handle_webapp(update, ctx):
         log.error(f"webapp handler error: {e}")
         await update.message.reply_text("❌ Ошибка. Попробуйте ещё раз.")
 
+
+# ── /help ─────────────────────────────────────────────────────────────────────
+async def help_cmd(update, ctx):
+    await update.message.reply_text(
+        "📖 *Справка ParcelGo*\n━━━━━━━━━━━━━━━━━━━━\n\n"
+        "*Основные команды:*\n"
+        "/start — главное меню\n"
+        "/help — эта справка\n"
+        "/myreqs — мои заявки и рейсы\n"
+        "/cancel — отменить активную заявку\n\n"
+        "*Как работает:*\n"
+        "1️⃣ Создай заявку или укажи маршрут\n"
+        "2️⃣ Бот найдёт совпадение и уведомит\n"
+        "3️⃣ Договоритесь напрямую\n\n"
+        "*⚠️ Важно:*\n"
+        "Без @username в Telegram другие не смогут написать вам напрямую. "
+        "Установите username в настройках Telegram → Изменить профиль → Имя пользователя.",
+        parse_mode="Markdown",
+        reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🏠 Главное меню", callback_data="back_main")]]))
+
+
+# ── ОТМЕНА ЗАЯВКИ ─────────────────────────────────────────────────────────────
+async def cancel_cmd(update, ctx):
+    uid = update.effective_user.id
+    reqs = db.get_user_requests(uid)
+    trips = db.get_user_trips(uid)
+    active_reqs = [r for r in reqs if r["status"] == "pending"]
+    active_trips = [t for t in trips if t["status"] == "active"]
+
+    if not active_reqs and not active_trips:
+        await update.message.reply_text(
+            "У вас нет активных заявок или рейсов для отмены.",
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🏠 Меню", callback_data="back_main")]]))
+        return
+
+    kb = []
+    for r in active_reqs:
+        kb.append([InlineKeyboardButton(
+            f"❌ Посылка: {r['from_city']} → {r['to_city']}",
+            callback_data=f"cancel_req_{r['id']}")])
+    for t in active_trips:
+        kb.append([InlineKeyboardButton(
+            f"❌ Рейс: {t['from_city']} → {t['to_city']} | {t['date']}",
+            callback_data=f"cancel_trip_{t['id']}")])
+    kb.append([InlineKeyboardButton("← Назад", callback_data="back_main")])
+
+    await update.message.reply_text(
+        "🗑 *Что отменить?*\n━━━━━━━━━━━━━━━━━━━━",
+        parse_mode="Markdown",
+        reply_markup=InlineKeyboardMarkup(kb))
+
+async def cancel_req_cb(update, ctx):
+    await update.callback_query.answer()
+    req_id = int(update.callback_query.data.split("_")[2])
+    uid = update.effective_user.id
+    req = db.get_request(req_id)
+    if req and req["user_id"] == uid:
+        db.update_request_status(req_id, "cancelled")
+        await update.callback_query.edit_message_text(
+            "✅ Заявка отменена.",
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🏠 Меню", callback_data="back_main")]]))
+    else:
+        await update.callback_query.edit_message_text("❌ Заявка не найдена.")
+
+async def cancel_trip_cb(update, ctx):
+    await update.callback_query.answer()
+    trip_id = int(update.callback_query.data.split("_")[2])
+    uid = update.effective_user.id
+    trip = db.get_trip(trip_id)
+    if trip and trip["user_id"] == uid:
+        db.conn.execute("UPDATE trips SET status='cancelled' WHERE id=?", (trip_id,))
+        db.conn.commit()
+        await update.callback_query.edit_message_text(
+            "✅ Рейс отменён.",
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🏠 Меню", callback_data="back_main")]]))
+    else:
+        await update.callback_query.edit_message_text("❌ Рейс не найден.")
+
+
+async def cancel_menu_cb(update, ctx):
+    await update.callback_query.answer()
+    uid = update.effective_user.id
+    reqs = db.get_user_requests(uid)
+    trips = db.get_user_trips(uid)
+    active_reqs = [r for r in reqs if r["status"] == "pending"]
+    active_trips = [t for t in trips if t["status"] == "active"]
+
+    if not active_reqs and not active_trips:
+        await update.callback_query.edit_message_text(
+            "У вас нет активных заявок для отмены.",
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("← Назад", callback_data="my")]]))
+        return
+
+    kb = []
+    for r in active_reqs:
+        kb.append([InlineKeyboardButton(
+            f"❌ Посылка: {r['from_city']} → {r['to_city']}",
+            callback_data=f"cancel_req_{r['id']}")])
+    for t in active_trips:
+        kb.append([InlineKeyboardButton(
+            f"❌ Рейс: {t['from_city']} → {t['to_city']} | {t['date']}",
+            callback_data=f"cancel_trip_{t['id']}")])
+    kb.append([InlineKeyboardButton("← Назад", callback_data="my")])
+
+    await update.callback_query.edit_message_text(
+        "🗑 *Что отменить?*\n━━━━━━━━━━━━━━━━━━━━",
+        parse_mode="Markdown",
+        reply_markup=InlineKeyboardMarkup(kb))
+
 # ── ЗАПУСК ────────────────────────────────────────────────────────────────────
 def main():
     app = Application.builder().token(TOKEN).build()
@@ -727,7 +943,7 @@ def main():
 
     conv = ConversationHandler(
         entry_points=[
-            CommandHandler("start", start),
+            CommandHandler("start", verify_phone),
             CallbackQueryHandler(send_start,       pattern="^send$"),
             CallbackQueryHandler(travel_start,     pattern="^travel$"),
             CallbackQueryHandler(search_start,     pattern="^search$"),
@@ -744,6 +960,7 @@ def main():
                 CallbackQueryHandler(how,             pattern="^how$"),
                 CallbackQueryHandler(my_req,          pattern="^my$"),
                 CallbackQueryHandler(bl,              pattern="^blacklist$"),
+                CallbackQueryHandler(cancel_menu_cb,  pattern="^cancel_menu$"),
             ],
             S_ROUTE:  [CallbackQueryHandler(s_route, pattern="^sr_"), CallbackQueryHandler(s_custom, pattern="^srcustom$")],
             S_CUSTOM: [MessageHandler(filters.TEXT & ~filters.COMMAND, handle_custom_route)],
@@ -760,6 +977,7 @@ def main():
             SEARCH_TO:  [MessageHandler(filters.TEXT & ~filters.COMMAND, search_to)],
             REVIEW_WHO: [MessageHandler(filters.TEXT & ~filters.COMMAND, review_who)],
             REVIEW_STARS:[CallbackQueryHandler(review_stars, pattern="^star_")],
+            PHONE_VERIFY:[MessageHandler(filters.CONTACT, handle_phone)],
         },
         fallbacks=[
             CommandHandler("start", start),
@@ -777,6 +995,12 @@ def main():
     app.add_handler(CallbackQueryHandler(free_post_start,pattern="^freepost$"))
     app.add_handler(CallbackQueryHandler(review_start,   pattern="^review_start$"))
     app.add_handler(MessageHandler(filters.StatusUpdate.WEB_APP_DATA, handle_webapp))
+    app.add_handler(CommandHandler("help", help_cmd))
+    app.add_handler(CommandHandler("myreqs", my_req))
+    app.add_handler(CommandHandler("cancel", cancel_cmd))
+    app.add_handler(CallbackQueryHandler(cancel_menu_cb, pattern="^cancel_menu$"))
+    app.add_handler(CallbackQueryHandler(cancel_req_cb, pattern="^cancel_req_"))
+    app.add_handler(CallbackQueryHandler(cancel_trip_cb, pattern="^cancel_trip_"))
     log.info("🚀 ParcelGo Bot v3 запущен!")
     app.run_polling(drop_pending_updates=True)
 
