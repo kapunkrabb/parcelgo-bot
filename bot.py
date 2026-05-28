@@ -439,6 +439,12 @@ async def back(update, ctx):
 # ── ЗАПУСК ────────────────────────────────────────────────────────────────────
 def main():
     app = Application.builder().token(TOKEN).build()
+
+    async def post_init(application):
+        await application.bot.delete_webhook(drop_pending_updates=True)
+
+    app.post_init = post_init
+
     conv = ConversationHandler(
         entry_points=[
             CommandHandler("start", start),
