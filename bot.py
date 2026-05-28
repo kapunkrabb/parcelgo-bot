@@ -1,4 +1,5 @@
 import logging
+import json
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
 from telegram.ext import (Application, CommandHandler, CallbackQueryHandler,
                            ConversationHandler, ContextTypes, MessageHandler, filters)
@@ -588,6 +589,134 @@ async def back(update, ctx):
     elif dest == "send":  return await send_start(update, ctx)
     elif dest == "travel":return await travel_start(update, ctx)
 
+
+# ── МИНИ-АПП: обработка данных ───────────────────────────────────────────────
+async def handle_webapp(update, ctx):
+    try:
+        raw = update.message.web_app_data.data
+        data = json.loads(raw)
+        user = update.effective_user
+        uid = user.id
+        db.upsert_user(uid, user.first_name, user.username)
+        author = contact_label(user.first_name, user.username)
+
+        if data.get("type") == "send":
+            from_city = data.get("from","")
+            to_city = data.get("to","")
+            item = data.get("item","")
+            size = data.get("size","")
+            date_str = data.get("date","")
+            note = data.get("note","")
+            date_part = f" | до {date_str}" if date_str else ""
+            note_part = f"\n📝 {note}" if note else ""
+
+            req_id = db.add_request(uid, from_city, to_city, size, item, "договорная")
+
+            channel_text = (
+                f"📦 *Нужен попутчик!*\n━━━━━━━━━━━━━━━━━━━━\n\n"
+                f"🗺 {from_city} → {to_city}\n"
+                f"📦 {item} | 📐 {size}{date_part}\n"
+                f"💰 Цена по договорённости{note_part}\n\n"
+                f"👤 Отправитель: {author}"
+            )
+            await publish_to_channel(ctx.bot, channel_text, user.username, "💬 Написать отправителю")
+
+            travelers = db.find_travelers(from_city, to_city)
+            if travelers:
+                kb = []
+                for t in travelers:
+                    if t["username"]:
+                        kb.append([contact_button(f"💬 Написать попутчику @{t['username']}", t["username"])])
+                kb.append([InlineKeyboardButton("📢 Канал", url="https://t.me/parcelgo_board")])
+                await update.message.reply_text(
+                    f"✅ *Заявка #{req_id} создана!*\n\n"
+                    f"🗺 {from_city} → {to_city}\n"
+                    f"🎉 Найдено попутчиков: {len(travelers)}",
+                    parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(kb))
+                for t in travelers:
+                    if t["user_id"] == uid: continue
+                    try:
+                        t_kb = []
+                        if user.username:
+                            t_kb.append([contact_button("💬 Написать отправителю", user.username)])
+                        await ctx.bot.send_message(t["user_id"],
+                            f"📦 *Новая посылка через мини-апп!*\n\n"
+                            f"🗺 {from_city} → {to_city}\n📦 {item} | 📐 {size}\n\n"
+                            f"👤 Отправитель: {author}",
+                            parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(t_kb))
+                    except: pass
+            else:
+                await update.message.reply_text(
+                    f"✅ *Заявка #{req_id} создана!*\n\n"
+                    f"🗺 {from_city} → {to_city}\n\n"
+                    f"🔍 Ищем попутчиков...\n📢 Объявление в @parcelgo_board",
+                    parse_mode="Markdown",
+                    reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("📢 Открыть канал", url="https://t.me/parcelgo_board")]]))
+
+        elif data.get("type") == "travel":
+            from_city = data.get("from","")
+            to_city = data.get("to","")
+            date_str = data.get("date","")
+            weight = data.get("weight","")
+            transport = data.get("transport","")
+            note = data.get("note","")
+            note_part = f"\n📝 {note}" if note else ""
+
+            trip_id = db.add_trip(uid, from_city, to_city, date_str, weight, "договорная", "—")
+
+            channel_text = (
+                f"✈️ *Возьму посылку!*\n━━━━━━━━━━━━━━━━━━━━\n\n"
+                f"🗺 {from_city} → {to_city}\n"
+                f"📅 {date_str} | ⚖️ до {weight} | {transport}{note_part}\n\n"
+                f"👤 Попутчик: {author}"
+            )
+            await publish_to_channel(ctx.bot, channel_text, user.username, "💬 Написать попутчику")
+
+            matches = db.find_matches_for_trip(from_city, to_city)
+            if matches:
+                kb = []
+                for m in matches:
+                    if m["username"]:
+                        kb.append([contact_button(f"💬 Написать отправителю @{m['username']}", m["username"])])
+                await update.message.reply_text(
+                    f"✅ *Рейс #{trip_id} добавлен!*\n\n"
+                    f"🗺 {from_city} → {to_city}\n"
+                    f"🎉 Найдено заявок: {len(matches)}",
+                    parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(kb))
+                for m in matches:
+                    if m["user_id"] == uid: continue
+                    try:
+                        s_kb = []
+                        if user.username:
+                            s_kb.append([contact_button("💬 Написать попутчику", user.username)])
+                        await ctx.bot.send_message(m["user_id"],
+                            f"🎉 *Найден попутчик через мини-апп!*\n\n"
+                            f"✈️ {from_city} → {to_city}\n📅 {date_str} | ⚖️ {weight}\n\n"
+                            f"👤 Попутчик: {author}",
+                            parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(s_kb))
+                    except: pass
+            else:
+                await update.message.reply_text(
+                    f"✅ *Рейс #{trip_id} добавлен!*\n\n"
+                    f"🗺 {from_city} → {to_city}\n\n"
+                    f"📭 Уведомим когда появятся посылки!\n📢 Объявление в @parcelgo_board",
+                    parse_mode="Markdown",
+                    reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("📢 Открыть канал", url="https://t.me/parcelgo_board")]]))
+
+        elif data.get("type") == "post":
+            text = data.get("text","")
+            await publish_to_channel(ctx.bot,
+                f"📣 *Объявление*\n━━━━━━━━━━━━━━━━━━━━\n\n{text}\n\n👤 Автор: {author}",
+                user.username, "💬 Написать автору")
+            await update.message.reply_text(
+                "✅ *Объявление опубликовано в канале!*\n\n👉 @parcelgo_board",
+                parse_mode="Markdown",
+                reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("📢 Открыть канал", url="https://t.me/parcelgo_board")]]))
+
+    except Exception as e:
+        log.error(f"webapp handler error: {e}")
+        await update.message.reply_text("❌ Ошибка. Попробуйте ещё раз.")
+
 # ── ЗАПУСК ────────────────────────────────────────────────────────────────────
 def main():
     app = Application.builder().token(TOKEN).build()
@@ -647,6 +776,7 @@ def main():
     app.add_handler(CallbackQueryHandler(search_start,   pattern="^search$"))
     app.add_handler(CallbackQueryHandler(free_post_start,pattern="^freepost$"))
     app.add_handler(CallbackQueryHandler(review_start,   pattern="^review_start$"))
+    app.add_handler(MessageHandler(filters.StatusUpdate.WEB_APP_DATA, handle_webapp))
     log.info("🚀 ParcelGo Bot v3 запущен!")
     app.run_polling(drop_pending_updates=True)
 
