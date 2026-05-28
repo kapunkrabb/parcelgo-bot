@@ -43,6 +43,7 @@ async def start(update, ctx):
     app_kb = InlineKeyboardMarkup([
         [InlineKeyboardButton("🚀 Открыть приложение", web_app=WebAppInfo(url="https://kapunkrabb.github.io/parcelgo-app"))],
         [InlineKeyboardButton("📦  Отправить посылку", callback_data="send")],
+        [InlineKeyboardButton("📢  Доска объявлений", url="https://t.me/parcelgo_board")],
         [InlineKeyboardButton("✈️  Я путешественник — заработать", callback_data="travel")],
         [InlineKeyboardButton("📋  Мои заявки", callback_data="my"), InlineKeyboardButton("❓  Как работает", callback_data="how")],
         [InlineKeyboardButton("🚫  Стоп-лист мошенников", callback_data="blacklist")],
