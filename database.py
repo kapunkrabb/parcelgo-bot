@@ -20,10 +20,14 @@ class Database:
                 id          INTEGER PRIMARY KEY,
                 name        TEXT,
                 username    TEXT,
+                phone       TEXT,
                 rating      REAL    DEFAULT 5.0,
                 trips_count INTEGER DEFAULT 0,
+                is_verified INTEGER DEFAULT 0,
                 created_at  TEXT    DEFAULT (datetime('now'))
             );
+            -- Migration: add phone column if not exists
+            CREATE TABLE IF NOT EXISTS _migrations (key TEXT PRIMARY KEY);
 
             CREATE TABLE IF NOT EXISTS trips (
                 id          INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -72,6 +76,15 @@ class Database:
             );
         """)
         self.conn.commit()
+        # Safe migration for existing databases
+        try:
+            self.conn.execute("ALTER TABLE users ADD COLUMN phone TEXT")
+            self.conn.commit()
+        except: pass
+        try:
+            self.conn.execute("ALTER TABLE users ADD COLUMN is_verified INTEGER DEFAULT 0")
+            self.conn.commit()
+        except: pass
 
     # ── USERS ──────────────────────────────────────────────────────────────
     def upsert_user(self, uid: int, name: str, username: str = None):
