@@ -2,8 +2,9 @@ import logging
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
 from telegram.ext import (Application, CommandHandler, CallbackQueryHandler,
                            ConversationHandler, ContextTypes, MessageHandler, filters)
- from database import db
-  from config import TOKEN, ADMIN_ID, CARD_NUMBER, CARD_HOLDER    CHANNEL_ID = "@parcelgo_board"
+from database import db
+from config import TOKEN, ADMIN_ID, CARD_NUMBER, CARD_HOLDER
+CHANNEL_ID = "@parcelgo_board"
 
 logging.basicConfig(format="%(asctime)s - %(levelname)s - %(message)s", level=logging.INFO)
 log = logging.getLogger(__name__)
@@ -39,7 +40,7 @@ async def start(update, ctx):
             f"Доставка посылок через попутчиков —\nв *3× дешевле* DHL и *5× быстрее* почты.\n\n"
             f"📊 *Статистика:*\n👥 18 420 участников\n📦 94 700 доставок\n🌍 67 стран\n⭐ 4.92 рейтинг\n\n"
             f"━━━━━━━━━━━━━━━━━━━━\nЧто хочешь сделать? 👇")
-    app_kb = InlineKeyboardMarkup([[InlineKeyboardButton("📢  Доска объявлений", url="https://t.me/parcelgo_board")],
+    app_kb = InlineKeyboardMarkup([
         [InlineKeyboardButton("🚀 Открыть приложение", web_app=WebAppInfo(url="https://kapunkrabb.github.io/parcelgo-app"))],
         [InlineKeyboardButton("📦  Отправить посылку", callback_data="send")],
         [InlineKeyboardButton("✈️  Я путешественник — заработать", callback_data="travel")],
@@ -439,12 +440,6 @@ async def back(update, ctx):
 # ── ЗАПУСК ────────────────────────────────────────────────────────────────────
 def main():
     app = Application.builder().token(TOKEN).build()
-
-    async def post_init(application):
-        await application.bot.delete_webhook(drop_pending_updates=True)
-
-    app.post_init = post_init
-
     conv = ConversationHandler(
         entry_points=[
             CommandHandler("start", start),
@@ -488,3 +483,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
