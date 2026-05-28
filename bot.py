@@ -59,7 +59,7 @@ async def start(update, ctx):
 
     text = (f"✦ *ParcelGo* ✦\n━━━━━━━━━━━━━━━━━━━━\n\nПривет, *{name}* 👋 {rating_str}\n\n"
             f"Доставка посылок через попутчиков —\nв *3× дешевле* DHL и *5× быстрее* почты.\n\n"
-            f"📊 *Статистика:*\n👥 18 420 участников\n📦 94 700 доставок\n🌍 67 стран\n⭐ 4.92 рейтинг\n\n"
+            f"🌍 Сводим отправителей и попутчиков напрямую — быстро, удобно, бесплатно.\n\n"
             f"━━━━━━━━━━━━━━━━━━━━\nЧто хочешь сделать? 👇")
     kb = InlineKeyboardMarkup([
         [InlineKeyboardButton("🚀 Открыть приложение", web_app=WebAppInfo(url="https://kapunkrabb.github.io/parcelgo-app"))],
